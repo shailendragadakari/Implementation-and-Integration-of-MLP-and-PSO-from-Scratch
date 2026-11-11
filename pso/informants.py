@@ -30,7 +30,7 @@ class RandomInformantSelection(InformantSelectionStrategy):
         idx = self._rng.choice(len(others), size=k, replace=False)
         return [others[i] for i in idx]
     
-class NearestNeighbourInformantSelection(InformantSelectionStrategy):
+class NearestNeighborInformantSelection(InformantSelectionStrategy):
     # k nearest particles by Euclidean distance between current positions.
     def select_informants(self, particle, population, k):
         self._check(k, len(population))

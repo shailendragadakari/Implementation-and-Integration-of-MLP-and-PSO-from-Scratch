@@ -11,7 +11,7 @@ class Particle:
         self.best_position = self.position.copy()
         self.best_fitness = np.inf   # infinity = "nothing seen yet", so any real score beats it
         self.fitness = np.inf        # score at the current position
-        self.informants: list["Particle"] = []  # the neighbours it listens to
+        self.informants: list["Particle"] = []  # the neighbors it listens to
         # Each particle has its own random generator for its r1, r2, r3 numbers.
         self._rng = rng if rng is not None else np.random.default_rng()
         
@@ -44,7 +44,7 @@ class Particle:
         self.velocity = (
             alpha * self.velocity                                    # keep some of the old direction (inertia)
             + beta * r1 * (self.best_position - self.position)       # pull toward my own best
-            + delta * r2 * (informants_best - self.position)         # pull toward my neighbours' best
+            + delta * r2 * (informants_best - self.position)         # pull toward my neighbors' best
             + gamma * r3 * (global_best - self.position)             # pull toward the swarm's best (0 by default)
         )
         
