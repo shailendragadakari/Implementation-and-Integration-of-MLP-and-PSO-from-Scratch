@@ -53,6 +53,5 @@ def get_activation(name: str) -> ActivationFunction:
     except KeyError:
         # Unknown word: fail loudly and list the valid choices.
         raise ValueError(
-            f"Unknown activation '{name}'. Valid choices are: {list(_REGISTRY.keys())}"
-        ) 
-        
+            f"Unknown activation '{name}'. Options: {sorted(_REGISTRY)}"
+        )
