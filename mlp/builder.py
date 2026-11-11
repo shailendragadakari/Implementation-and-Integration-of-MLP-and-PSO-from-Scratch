@@ -65,9 +65,9 @@ class MLPBuilder:
     def build_layers(self) -> Network:
         network = Network()
         # Layer sizes in order, for example [4, 8, 5]: input layer size, then each hidden layer size.
-        sizes = [self.determine_input_size()] = [int(h) for h in self.config["hidden_layers"]]
-        # Pair up neighbours: (4->8 with act 1), (8->5 with act 2) and so on...
-        for n_in, n_out, act in zip(sizes[:1], sizes[1:], self.config["activations"]):
+        sizes = [self.determine_input_size()] + [int(h) for h in self.config["hidden_layers"]]
+        # Pair up neighbors: (4->8 with act 1), (8->5 with act 2) and so on...
+        for n_in, n_out, act in zip(sizes[:-1], sizes[1:], self.config["activations"]):
             network.add_layer(Layer(n_in, n_out, get_activation(act), self._rng))
         # Finally the output layer, whose size and activation come from the task.
         network.add_layer(
