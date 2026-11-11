@@ -7,8 +7,8 @@ import pandas as pd
 import streamlit as st
 
 from training import train_pso_mlp
-from utils.data import Standardiser, load_dataset, train_test_split
-from utils.metrics import classification_metrics, probabilities_to_labels
+from utilities.data import Standardiser, load_dataset, train_test_split
+from utilities.metrics import classification_metrics, probabilities_to_labels
 
 DATA = Path(__file__).parent / "data" / "data_banknote_authentication.txt"
 FEATURES = ["Variance", "Skewness", "Curtosis", "Entropy"]
