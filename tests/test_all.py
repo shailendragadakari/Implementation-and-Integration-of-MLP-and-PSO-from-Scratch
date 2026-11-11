@@ -123,7 +123,7 @@ def test_informants_exclude_self_distinct_and_k_bounds(strategy):
         with pytest.raises(ValueError):
             strategy.select_informants(ps[0], ps, bad)
             
-def test_nearest_neighbour_matches_bruteforce():
+def test_nearest_neighbor_matches_bruteforce():
     ps = make_particles(n=12, d=5, seed=4)
     target = ps[0]
     got = NearestNeighborInformantSelection().select_informants(target, ps, 4)
