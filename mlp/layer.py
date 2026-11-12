@@ -3,8 +3,11 @@
 
 import numpy as np
 
+from mlp.activations import ActivationFunction
+
+
 class Layer:
-    def __init__(self, n_in: int, n_out: int, activation, rng=None):
+    def __init__(self, n_in: int, n_out: int, activation: ActivationFunction, rng=None):
         self.n_in = n_in            # how many numbers come into this layer
         self.n_out = n_out          # how many neurons this layer has
         self.activation = activation

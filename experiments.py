@@ -11,12 +11,14 @@ import time
 from concurrent.futures import ProcessPoolExecutor
 from copy import deepcopy
 from pathlib import Path
+
 import numpy as np
+
 from adapter import MLPFitnessAdapter
 from mlp import MLPBuilder
-from pso import NearestNeighborInformantSelection, Population, RandomInformantSelection
-from utilities.data import Standardiser, load_dataset, train_test_split
-from utilities.metrics import classification_metrics, probabilities_to_labels
+from pso import NearestNeighbourInformantSelection, Population, RandomInformantSelection
+from utils.data import Standardiser, load_dataset, train_test_split
+from utils.metrics import classification_metrics, probabilities_to_labels
 
 DATA_PATH = Path(__file__).parent / "data" / "data_banknote_authentication.txt"
 
@@ -27,9 +29,10 @@ DEFAULT_CONFIG = {
     "alpha": 0.7, "beta": 1.5, "delta": 1.5, "gamma": 0.0, "epsilon": 1.0,
 }
 
-# data
+
+# --------------------------------------------------------------------------- data
 def make_data(split_seed=42):
-    # Return a dictionary with FIT/VAL arrays (for tuning) and TRAIN/TEST arrays.
+    # Return a dict with FIT/VAL arrays (for tuning) and TRAIN/TEST arrays (for final).
     X, y = load_dataset(DATA_PATH)
     X_tr, X_te, y_tr, y_te = train_test_split(X, y, 0.2, split_seed)
     X_fit, X_val, y_fit, y_val = train_test_split(X_tr, y_tr, 0.25, split_seed + 1)
@@ -39,10 +42,11 @@ def make_data(split_seed=42):
         "fit": (s_fit.transform(X_fit), y_fit), "val": (s_fit.transform(X_val), y_val),
         "train": (s_tr.transform(X_tr), y_tr), "test": (s_tr.transform(X_te), y_te),
     }
-    
-# one run
-def run_trail(config, seed, train, evaluate):
-    # Train an MLP with PSO on 'train', report metrics to 'evaluate'. Returns a flat dictionary.
+
+
+# --------------------------------------------------------------------------- one run
+def run_trial(config, seed, train, evaluate):
+    # Train an MLP with PSO on `train`, report metrics on `evaluate`. Returns a flat dict.
     X_tr, y_tr = train
     X_ev, y_ev = evaluate
     t0 = time.perf_counter()
@@ -53,7 +57,7 @@ def run_trail(config, seed, train, evaluate):
                                "task": "binary_classification"})
     network, loss = builder.build()
     fitness = MLPFitnessAdapter(network, loss, X_tr, y_tr)
-    strategy = (NearestNeighborInformantSelection() if config["strategy"] == "nearest"
+    strategy = (NearestNeighbourInformantSelection() if config["strategy"] == "nearest"
                 else RandomInformantSelection(seed=seed))
     pop = Population(
         fitness_function=fitness, informant_strategy=strategy,
@@ -63,7 +67,7 @@ def run_trail(config, seed, train, evaluate):
         social_coefficient=config["delta"], global_coefficient=config["gamma"],
         step_size=config["epsilon"], seed=seed,
     )
-    best_pos, best_fit = pop.optimize()
+    best_pos, best_fit = pop.optimise()
     network.set_parameters(best_pos)
 
     probs = network.predict(X_ev)
@@ -80,29 +84,33 @@ def run_trail(config, seed, train, evaluate):
         "evaluations": pop.n_evaluations, "seconds": time.perf_counter() - t0,
         "history": hist, "mean_history": np.array(pop.history["mean_fitness"]),
     }
-    
-def _worker(args):
-    return run_trail(*args)
 
-# experiments
+
+def _worker(args):
+    return run_trial(*args)
+
+
+# --------------------------------------------------------------------------- experiments
 def make_configs(param, values, base=None):
-    # One config per value of a single hyperparameter.
+    # One config per value of a single hyperparameter. Returns {label: config}.
     base = base or DEFAULT_CONFIG
     out = {}
     for v in values:
         c = deepcopy(base)
         c[param] = v
-        # keep activations consistent when the hidden layer list changes
+        # keep activations consistent when the hidden-layer list changes
         if param == "hidden":
             c["activations"] = [base["activations"][0]] * len(v)
         out[str(v)] = c
     return out
 
+
 def run_experiment(configs, seeds, data, mode="val", n_jobs=None):
     # Run each labelled config for each seed.
-    # mode='val'    : train on FIT, evaluate on VALIDATION (use for tuning)
-    # mode='test    : train on full TRAIN, evaluate on TEST (use once, for final numbers)
-    # Returns a list of result dictionaries (each includes 'label' and the config values)
+    #
+    #     mode='val'  : train on FIT, evaluate on VALIDATION (use for tuning)
+    #     mode='test' : train on full TRAIN, evaluate on TEST (use once, for final numbers)
+    #     Returns a list of result dicts (each includes 'label' and the config values).
     train, ev = (data["fit"], data["val"]) if mode == "val" else (data["train"], data["test"])
     jobs, labels = [], []
     for label, cfg in configs.items():
@@ -120,12 +128,14 @@ def run_experiment(configs, seeds, data, mode="val", n_jobs=None):
         r.update({f"cfg_{k}": (str(v) if isinstance(v, list) else v) for k, v in cfg.items()})
     return results
 
-# analysis
+
+# --------------------------------------------------------------------------- analysis
 def to_frame(results):
     import pandas as pd
     return pd.DataFrame([{k: v for k, v in r.items() if k not in ("history", "mean_history")}
                          for r in results])
-    
+
+
 def summarise(results, order=None):
     df = to_frame(results)
     cols = ["train_loss", "eval_loss", "eval_accuracy", "eval_f1", "iters_to_within_5pct", "seconds"]
@@ -133,16 +143,18 @@ def summarise(results, order=None):
     g.columns = [f"{a}_{b}" for a, b in g.columns]
     return g.loc[order] if order else g
 
+
 def histories_by_label(results, key="history"):
-    # {label: array (n_seeds, n_iters+1)} - all seeds for a label share a length
+    # {label: array (n_seeds, n_iters+1)} — all seeds for a label share a length.
     out = {}
     for r in results:
         out.setdefault(r["label"], []).append(r[key])
     return {k: np.stack(v) for k, v in out.items()}
 
+
 def paired_permutation_test(a, b, n_perm=20000, seed=0):
-    # Two-sided sign flip permutation test on paired differences a-b (same seeds).
-    # Returns (mean difference, p-value). NumPy only, no distributional assumptions.
+    # Two-sided sign-flip permutation test on paired differences a-b (same seeds).
+    #     Returns (mean difference, p-value). NumPy only, no distributional assumptions.
     d = np.asarray(a, float) - np.asarray(b, float)
     rng = np.random.default_rng(seed)
     obs = abs(d.mean())
@@ -150,7 +162,8 @@ def paired_permutation_test(a, b, n_perm=20000, seed=0):
     perm = np.abs((signs * d).mean(axis=1))
     return float(d.mean()), float((np.sum(perm >= obs - 1e-15) + 1) / (n_perm + 1))
 
-# plotting
+
+# --------------------------------------------------------------------------- plotting
 def plot_convergence(histories, title="PSO convergence", logy=True, ax=None):
     import matplotlib.pyplot as plt
     ax = ax or plt.subplots(figsize=(7, 4.2))[1]
@@ -165,6 +178,7 @@ def plot_convergence(histories, title="PSO convergence", logy=True, ax=None):
     ax.set_title(title); ax.legend(fontsize=8); ax.grid(alpha=0.3)
     return ax
 
+
 def plot_metric_vs_param(results, metric="eval_accuracy", xlabel="", title="", ax=None):
     import matplotlib.pyplot as plt
     df = to_frame(results)
@@ -174,6 +188,7 @@ def plot_metric_vs_param(results, metric="eval_accuracy", xlabel="", title="", a
     ax.boxplot(data, tick_labels=labels, showmeans=True)
     ax.set_xlabel(xlabel); ax.set_ylabel(metric); ax.set_title(title); ax.grid(alpha=0.3)
     return ax
+
 
 if __name__ == "__main__":
     d = make_data()

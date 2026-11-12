@@ -11,6 +11,7 @@ from mlp.network import Network
 
 TASKS = ("binary_classification", "multiclass_classification")
 
+
 class MLPBuilder:
     def __init__(self, seed=None):
         self.X = None
@@ -61,12 +62,12 @@ class MLPBuilder:
         if self.config["task"] == "binary_classification":
             return BinaryCrossEntropy()
         return CategoricalCrossEntropy()
-    
+
     def build_layers(self) -> Network:
         network = Network()
-        # Layer sizes in order, for example [4, 8, 5]: input layer size, then each hidden layer size.
+        # Layer sizes in order, e.g. [4, 8, 5]: input, then each hidden layer.
         sizes = [self.determine_input_size()] + [int(h) for h in self.config["hidden_layers"]]
-        # Pair up neighbors: (4->8 with act 1), (8->5 with act 2) and so on...
+        # Pair up neighbours: (4->8 with act 1), (8->5 with act 2), ...
         for n_in, n_out, act in zip(sizes[:-1], sizes[1:], self.config["activations"]):
             network.add_layer(Layer(n_in, n_out, get_activation(act), self._rng))
         # Finally the output layer, whose size and activation come from the task.
@@ -75,10 +76,10 @@ class MLPBuilder:
                   self.determine_output_activation(), self._rng)
         )
         return network
-    
+
     def build(self):
-        if self.X is None or self.y is None:
+        if self.X is None or self.config is None:
             raise RuntimeError("Call set_dataset() and set_configuration() before build()")
         self._network = self.build_layers()
         self._loss = self.determine_loss()
-        return self._network, self._loss    # the network and the loss to score it with 
+        return self._network, self._loss  # the network and the loss to score it with

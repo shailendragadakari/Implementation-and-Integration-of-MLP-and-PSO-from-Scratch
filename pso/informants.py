@@ -2,9 +2,10 @@
 # Both strategies exclude the particle itself and return exactly k particles.
 # "Informants" are the neighbors a particle listens to; swapping the strategy
 # changes who the neighbors are without touching any other code.
-
 from abc import ABC, abstractmethod
+
 import numpy as np
+
 
 class InformantSelectionStrategy(ABC):
     @abstractmethod
@@ -17,9 +18,11 @@ class InformantSelectionStrategy(ABC):
         # A particle needs at least 1 informant and at most everyone but itself.
         if not 1 <= k <= n - 1:
             raise ValueError(f"Need 1 <= k <= N-1 (k={k}, N={n})")
-        
+
+
 class RandomInformantSelection(InformantSelectionStrategy):
     # Pick k other particles completely at random.
+
     def __init__(self, seed=None):
         self._rng = np.random.default_rng(seed)
 
@@ -29,9 +32,11 @@ class RandomInformantSelection(InformantSelectionStrategy):
         # replace=False -> no particle is chosen twice.
         idx = self._rng.choice(len(others), size=k, replace=False)
         return [others[i] for i in idx]
-    
-class NearestNeighborInformantSelection(InformantSelectionStrategy):
+
+
+class NearestNeighbourInformantSelection(InformantSelectionStrategy):
     # k nearest particles by Euclidean distance between current positions.
+
     def select_informants(self, particle, population, k):
         self._check(k, len(population))
         others = [p for p in population if p is not particle]

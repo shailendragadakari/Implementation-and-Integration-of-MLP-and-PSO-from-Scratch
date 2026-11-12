@@ -3,13 +3,15 @@
 
 import argparse
 from pathlib import Path
+
 from adapter import MLPFitnessAdapter
 from mlp import MLPBuilder
-from pso import NearestNeighborInformantSelection, Population, RandomInformantSelection
-from utilities.data import Standardiser, load_dataset, train_test_split
-from utilities.metrics import classification_metrics, probabilities_to_labels
+from pso import NearestNeighbourInformantSelection, Population, RandomInformantSelection
+from utils.data import Standardiser, load_dataset, train_test_split
+from utils.metrics import classification_metrics, probabilities_to_labels
 
 DATA = Path(__file__).parent / "data" / "data_banknote_authentication.txt"
+
 
 def parse_args():
     a = argparse.ArgumentParser()
@@ -27,15 +29,16 @@ def parse_args():
     a.add_argument("--seed", type=int, default=42)
     return a.parse_args()
 
+
 def main():
     args = parse_args()
-    
+
     # 1. Load and prepare the dataset (split first, then fit scaling on train only)
     X, y = load_dataset(DATA)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     scaler = Standardiser().fit(X_train)
     X_train, X_test = scaler.transform(X_train), scaler.transform(X_test)
-    
+
     # 2. Configure and build the MLP
     activations = args.activations or ["tanh"] * len(args.hidden)
     builder = MLPBuilder(seed=args.seed)
@@ -43,20 +46,20 @@ def main():
     builder.set_configuration({
         "hidden_layers": args.hidden,
         "activations": activations,
-        "task": "binary_classification"
+        "task": "binary_classification",
     })
     network, loss = builder.build()
     print(f"MLP: {X_train.shape[1]} -> {args.hidden} -> 1 | parameters (PSO dimension): "
           f"{network.count_parameters()}")
-    
+
     # 3. Adapter (training data only)
     fitness = MLPFitnessAdapter(network=network, loss=loss, X_train=X_train, y_train=y_train)
-    
+
     # 4. Informant strategy
-    strategy = (NearestNeighborInformantSelection() if args.informants == "nearest"
+    strategy = (NearestNeighbourInformantSelection() if args.informants == "nearest"
                 else RandomInformantSelection(seed=args.seed))
-    
-    # 5. PSO Population
+
+    # 5. PSO population
     population = Population(
         fitness_function=fitness, informant_strategy=strategy,
         num_particles=args.particles, num_informants=args.k,
@@ -65,14 +68,14 @@ def main():
         social_coefficient=args.delta, global_coefficient=args.gamma,
         step_size=args.epsilon, seed=args.seed,
     )
-    
-    # 6. Optimize
-    best_position, best_fitness = population.optimize()
-    print(f"Best training loss: {best_fitness:.5f} ({population.n_evaluations} fitness evaluations)")
-    
+
+    # 6. Optimise
+    best_position, best_fitness = population.optimise()
+    print(f"Best training loss: {best_fitness:.5f}  ({population.n_evaluations} fitness evaluations)")
+
     # 7. Install the best parameters
     network.set_parameters(best_position)
-    
+
     # 8. Evaluate on unseen test data
     labels = probabilities_to_labels(network.predict(X_test))
     m = classification_metrics(y_test, labels)
@@ -81,6 +84,7 @@ def main():
     print(f"Test recall   : {m['recall']:.4f}")
     print(f"Test F1-score : {m['f1']:.4f}")
     print(f"Confusion (tp, tn, fp, fn): {m['tp']}, {m['tn']}, {m['fp']}, {m['fn']}")
-    
+
+
 if __name__ == "__main__":
     main()

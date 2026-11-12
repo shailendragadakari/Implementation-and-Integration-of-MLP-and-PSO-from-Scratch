@@ -7,8 +7,8 @@ import pandas as pd
 import streamlit as st
 
 from training import train_pso_mlp
-from utilities.data import Standardiser, load_dataset, train_test_split
-from utilities.metrics import classification_metrics, probabilities_to_labels
+from utils.data import Standardiser, load_dataset, train_test_split
+from utils.metrics import classification_metrics, probabilities_to_labels
 
 DATA = Path(__file__).parent / "data" / "data_banknote_authentication.txt"
 FEATURES = ["Variance", "Skewness", "Curtosis", "Entropy"]
@@ -52,7 +52,7 @@ sb.header("PSO")
 particles = sb.slider("Particles", 5, 200, 30)
 iterations = sb.slider("Iterations", 10, 500, 100, step=10)
 strategy = sb.radio("Informant selection", ["nearest", "random"],
-                    format_func=lambda s: "Nearest neighbor (Euclidean)" if s == "nearest" else "Random",
+                    format_func=lambda s: "Nearest neighbour (Euclidean)" if s == "nearest" else "Random",
                     horizontal=False)
 k = sb.slider("Informants (k)", 1, particles - 1, min(3, particles - 1))
 alpha = sb.slider("Inertia α", 0.0, 1.2, 0.7, 0.05)

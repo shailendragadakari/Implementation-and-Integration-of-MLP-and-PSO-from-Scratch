@@ -2,7 +2,9 @@
 # No training algorithm stays here.
 
 import numpy as np
+
 from mlp.layer import Layer
+
 
 class Network:
     def __init__(self):

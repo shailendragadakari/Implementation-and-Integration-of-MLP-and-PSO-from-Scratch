@@ -1,10 +1,11 @@
 # Classification metrics (binary, positive class = 1).
-
 import numpy as np
+
 
 def probabilities_to_labels(probs, threshold=0.5):
     # Turn probabilities into 0/1 labels: at or above the threshold -> 1.
     return (np.asarray(probs).ravel() >= threshold).astype(int)
+
 
 def confusion_counts(y_true, y_pred):
     # Count true/false positives/negatives (positive class = 1).
@@ -16,6 +17,7 @@ def confusion_counts(y_true, y_pred):
     fp = int(np.sum((y_true == 0) & (y_pred == 1)))
     fn = int(np.sum((y_true == 1) & (y_pred == 0)))
     return tp, tn, fp, fn
+
 
 def classification_metrics(y_true, y_pred):
     # Accuracy, precision, recall, F1 and the four counts.
