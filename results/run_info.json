@@ -1,0 +1,20 @@
+{
+  "final_config": {
+    "hidden": [
+      8
+    ],
+    "activations": [
+      "tanh"
+    ],
+    "strategy": "nearest",
+    "k": 3,
+    "particles": 30,
+    "iterations": 100,
+    "alpha": 0.7,
+    "beta": 1.5,
+    "delta": 1.5,
+    "gamma": 0.0,
+    "epsilon": 1.0
+  },
+  "n_seeds": 10
+}
