@@ -63,7 +63,7 @@ def run_trail(config, seed, train, evaluate):
         social_coefficient=config["delta"], global_coefficient=config["gamma"],
         step_size=config["epsilon"], seed=seed,
     )
-    best_pos, best_fit = pop.optimise()
+    best_pos, best_fit = pop.optimize()
     network.set_parameters(best_pos)
 
     probs = network.predict(X_ev)

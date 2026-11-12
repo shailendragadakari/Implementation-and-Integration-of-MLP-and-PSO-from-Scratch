@@ -66,8 +66,8 @@ def main():
         step_size=args.epsilon, seed=args.seed,
     )
     
-    # 6. Optimise
-    best_position, best_fitness = population.optimise()
+    # 6. Optimize
+    best_position, best_fitness = population.optimize()
     print(f"Best training loss: {best_fitness:.5f} ({population.n_evaluations} fitness evaluations)")
     
     # 7. Install the best parameters
