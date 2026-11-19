@@ -1,0 +1,49 @@
+{
+  "best_run": {
+    "seed": 6,
+    "selection_rule": "highest test accuracy, ties broken by lowest test loss (chosen from the 10 final seeds in final_test.csv)",
+    "final_config": {
+      "hidden": [
+        8
+      ],
+      "activations": [
+        "tanh"
+      ],
+      "strategy": "nearest",
+      "k": 3,
+      "particles": 30,
+      "iterations": 100,
+      "alpha": 0.7,
+      "beta": 1.5,
+      "delta": 1.5,
+      "gamma": 0.0,
+      "epsilon": 1.0
+    },
+    "dimension": 49,
+    "evaluations": 3030,
+    "iterations_to_within_5pct_of_final_loss": 92,
+    "seconds": 0.3803,
+    "train_loss": 0.004171,
+    "test": {
+      "loss": 0.006133,
+      "accuracy": 1.0,
+      "correct_of_274": 274,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    }
+  },
+  "all_seeds": {
+    "n_seeds": 10,
+    "test_accuracy_mean": 0.994891,
+    "test_accuracy_std": 0.004284,
+    "test_accuracy_min": 0.989051,
+    "test_accuracy_max": 1.0,
+    "seeds_with_100_percent": [
+      1,
+      6,
+      7
+    ]
+  },
+  "note": "The best seed was picked by looking at test results, so report the all_seeds mean as the headline figure and this run as the best case."
+}
