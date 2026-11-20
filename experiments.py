@@ -163,6 +163,45 @@ def paired_permutation_test(a, b, n_perm=20000, seed=0):
     return float(d.mean()), float((np.sum(perm >= obs - 1e-15) + 1) / (n_perm + 1))
 
 
+# --------------------------------------------------------------------------- overfitting checks
+def train_vs_test(config, seeds, data):
+    # Overfitting check: train the SAME network on TRAIN and score it on TRAIN and on TEST.
+    # Overfitting would show as high train accuracy but clearly lower test accuracy.
+    # Runs are repeatable, so training twice with one seed gives the same weights both times.
+    rows = []
+    for s in seeds:
+        on_test = run_trial(config, s, data["train"], data["test"])
+        on_train = run_trial(config, s, data["train"], data["train"])
+        rows.append({"seed": s,
+                     "train_accuracy": on_train["eval_accuracy"], "test_accuracy": on_test["eval_accuracy"],
+                     "train_loss": on_test["train_loss"], "test_loss": on_test["eval_loss"]})
+    return rows
+
+
+def duplicate_overlap(split_seed=42):
+    # Count test rows whose 4 feature values also appear exactly in the training rows.
+    # The public banknote file contains duplicate rows, so this can make test accuracy a bit optimistic.
+    X, y = load_dataset(DATA_PATH)
+    X_tr, X_te, _, _ = train_test_split(X, y, 0.2, split_seed)
+    train_rows = {tuple(r) for r in X_tr}
+    n_dup = sum(tuple(r) in train_rows for r in X_te)
+    return {"duplicate_rows_in_file": int(len(X) - len(np.unique(X, axis=0))),
+            "test_rows_also_in_train": int(n_dup), "test_rows": int(len(X_te))}
+
+
+def split_robustness(config, split_seeds, seeds):
+    # Repeat the final train/test experiment on several different random splits.
+    # This shows how much the test accuracy depends on which rows landed in the test set.
+    rows = []
+    for ss in split_seeds:
+        d = make_data(ss)
+        for s in seeds:
+            r = run_trial(config, s, d["train"], d["test"])
+            rows.append({"split_seed": ss, "seed": s, "test_accuracy": r["eval_accuracy"],
+                         "test_loss": r["eval_loss"]})
+    return rows
+
+
 # --------------------------------------------------------------------------- plotting
 def plot_convergence(histories, title="PSO convergence", logy=True, ax=None):
     import matplotlib.pyplot as plt
