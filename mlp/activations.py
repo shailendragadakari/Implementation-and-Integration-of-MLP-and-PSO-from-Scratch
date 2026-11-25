@@ -27,6 +27,11 @@ class Sigmoid(ActivationFunction):
         ez = np.exp(z[~pos])                        # safe: z is negative here
         out[~pos] = ez / (1.0 + ez)
         return out
+    
+class ReLU(ActivationFunction):
+    # max(0, z), element-wise
+    def forward(self, z):
+        return np.maximum(0.0, z)
 
 
 class Tanh(ActivationFunction):
