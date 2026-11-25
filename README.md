@@ -29,7 +29,7 @@ Everything the notebook produces is in the `results/` folder.
 | `results/significance.csv` | Paired permutation tests for the key comparisons. |
 | `results/figures/` | PNG plots for the extra experiments. |
 
-Each sweep CSV has one row per seed and setting. Useful columns are `eval_accuracy`, `eval_loss`, `eval_f1`, `train_loss`, `iters_to_within_5pct` (how quickly the run converged), `evaluations`, `seconds`, and the `cfg_*` columns that record the configuration used.
+Each sweep CSV has one row per seed and setting. Useful columns are `eval_accuracy`, `eval_loss`, `eval_f1`, `train_loss`, `iters_to_within_5pct` (how quickly the run converged), `evaluations`, `seconds`, `activations_used` (the hidden activation of each layer actually used) and the `cfg_*` columns that record the configuration used. Empty `cfg_*` values mean that option was not set and the default applied.
 
 ### Best-run snapshot
 
