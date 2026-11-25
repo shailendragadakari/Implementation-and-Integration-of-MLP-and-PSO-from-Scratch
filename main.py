@@ -1,5 +1,6 @@
 # Main application: load -> split -> build MLP -> adapter -> PSO -> test.
-# python main.py --informants nearest --k 3 --particles 30 --iterations 100
+# python main.py --informants nearest --k 10 --particles 30 --iterations 100
+# (the defaults below are the final configuration chosen on the validation set)
 
 import argparse
 from pathlib import Path
@@ -18,12 +19,12 @@ def parse_args():
     a.add_argument("--hidden", type=int, nargs="+", default=[8])
     a.add_argument("--activations", nargs="+", default=None, help="default: tanh per hidden layer")
     a.add_argument("--informants", choices=["random", "nearest"], default="nearest")
-    a.add_argument("--k", type=int, default=3, help="number of informants")
+    a.add_argument("--k", type=int, default=10, help="number of informants")
     a.add_argument("--particles", type=int, default=30)
     a.add_argument("--iterations", type=int, default=100)
     a.add_argument("--alpha", type=float, default=0.7, help="inertia")
-    a.add_argument("--beta", type=float, default=1.5, help="cognitive")
-    a.add_argument("--delta", type=float, default=1.5, help="informant (social)")
+    a.add_argument("--beta", type=float, default=1.0, help="cognitive")
+    a.add_argument("--delta", type=float, default=1.0, help="informant (social)")
     a.add_argument("--gamma", type=float, default=0.0, help="global-best")
     a.add_argument("--epsilon", type=float, default=1.0, help="step size")
     a.add_argument("--seed", type=int, default=42)

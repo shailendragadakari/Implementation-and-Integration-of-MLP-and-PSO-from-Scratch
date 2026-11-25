@@ -6,7 +6,7 @@ Both algorithms are written from scratch in Python with NumPy. No existing ANN o
 
 ## Headline result
 
-The task is the UCI banknote authentication dataset (1,372 notes, 4 features, 2 classes). With the final configuration (one hidden layer of 8 tanh neurons, 49 parameters, 30 particles, 100 iterations, nearest-neighbour informants with k = 3), the PSO-trained network reaches a **mean test accuracy of 99.49% (± 0.43) over 10 seeds**. The per-seed range is 98.91% to 100%, and 3 of the 10 seeds classify all 274 test notes correctly.
+The task is the UCI banknote authentication dataset (1,372 notes, 4 features, 2 classes). With the final configuration (one hidden layer of 8 tanh neurons, 49 parameters, 30 particles, 100 iterations, nearest-neighbour informants with k = 10, cognitive β = 1.0, informant δ = 1.0), the PSO-trained network reaches a **mean test accuracy of 100.00% (± 0.00) over 10 seeds**: every seed classifies all 274 test notes correctly (mean test loss 0.0027 ± 0.0037). This configuration was chosen on the validation set by combining the best single-sweep values (see "Combined best settings" below) and the test set was run once with it. The earlier default configuration (k = 3, β = 1.5, δ = 1.5) reached 99.49% ± 0.43 on the same test set; its result files are kept in `results/previous_default_final/`. Because 274 test notes is a small test set and the banknote data is close to separable, 100% on every seed should be read as "at the ceiling of what this test set can show", not as a perfect classifier. See the overfitting checks at the end of this section.
 
 Each run takes well under a second on the machine that ran the notebook.
 
@@ -16,9 +16,11 @@ Everything the notebook produces is in the `results/` folder.
 
 | File | What it contains |
 |---|---|
-| `results/final_test.csv` | The final configuration run on 10 seeds and scored on the **test set**. This is where the 98 to 100% accuracy figures come from. |
+| `results/final_test.csv` | The final configuration run on 10 seeds and scored on the **test set**. This is where the test accuracy figures come from. |
 | `results/run_info.json` | The final configuration and the number of seeds used. |
-| `results/best_run.json` | Snapshot of the best of the 10 final runs (seed 6), in the same style as `run_info.json`, plus a summary of all 10 seeds. |
+| `results/best_run.json` | Snapshot of the best of the 10 final runs (seed 4, chosen by the lowest test loss because every seed reached 100%), in the same style as `run_info.json`, plus a summary of all 10 seeds. |
+| `results/previous_default_final/` | The final-test, run-info, best-run, overfitting and split-robustness files from the earlier run with the default configuration (k = 3, β = 1.5, δ = 1.5), kept for comparison. |
+| `results/overfitting_check.csv`, `results/split_robustness.csv` | Train-versus-test accuracy and repeated random splits for the final configuration. |
 | `results/pso_alpha.csv`, `pso_beta.csv`, `pso_delta.csv`, `pso_gamma.csv`, `pso_epsilon.csv` | PSO coefficient sweeps (validation set). |
 | `results/pso_iterations.csv`, `pso_particles.csv` | Iteration-count and swarm-size sweeps (validation set). |
 | `results/mlp_width.csv`, `mlp_depth.csv`, `mlp_activation.csv` | Network-size and activation sweeps (validation set). |
@@ -31,24 +33,31 @@ Each sweep CSV has one row per seed and setting. Useful columns are `eval_accura
 
 ### Best-run snapshot
 
-`results/best_run.json` holds the snapshot of the best run: seed 6, which classified all 274 test notes correctly (test loss 0.0061, F1 1.0), took 0.38 s and 3,030 fitness evaluations, and used the final configuration.
+`results/best_run.json` holds the snapshot of the best run: seed 4, which classified all 274 test notes correctly (test loss 0.0001, F1 1.0), took 0.38 s and 3,030 fitness evaluations, and used the final configuration.
 
-"Best" means the highest test accuracy, with ties broken by the lowest test loss. Seeds 1, 6 and 7 all reached 100%. Because this seed was chosen by looking at test results, quote the 10-seed mean above as the headline figure and treat the seed-6 run as the best case. Seed 6 was also the quickest of the ten runs, but timings depend on the machine and are not a meaningful ranking.
+"Best" means the highest test accuracy, with ties broken by the lowest test loss. All ten seeds reached 100%, so here the choice is made by test loss alone and the snapshot carries little information. Quote the 10-seed mean above as the headline figure. Timings depend on the machine and are not a meaningful ranking.
 
 ### Final test results, per seed
 
 | Seed | Test accuracy | Test loss | F1 | Seconds |
 |---|---|---|---|---|
-| 0 | 98.91% | 0.0219 | 0.9879 | 0.43 |
-| 1 | 100.00% | 0.0085 | 1.0000 | 0.44 |
-| 2 | 99.64% | 0.0061 | 0.9959 | 0.38 |
-| 3 | 98.91% | 0.0218 | 0.9878 | 0.38 |
-| 4 | 99.27% | 0.0211 | 0.9919 | 0.43 |
-| 5 | 99.27% | 0.0271 | 0.9918 | 0.44 |
-| 6 | 100.00% | 0.0061 | 1.0000 | 0.38 |
-| 7 | 100.00% | 0.0114 | 1.0000 | 0.38 |
-| 8 | 99.64% | 0.0140 | 0.9959 | 0.42 |
-| 9 | 99.27% | 0.0210 | 0.9918 | 0.44 |
+| 0 | 100.00% | 0.0004 | 1.0000 | 0.26 |
+| 1 | 100.00% | 0.0006 | 1.0000 | 0.27 |
+| 2 | 100.00% | 0.0010 | 1.0000 | 0.27 |
+| 3 | 100.00% | 0.0051 | 1.0000 | 0.32 |
+| 4 | 100.00% | 0.0001 | 1.0000 | 0.38 |
+| 5 | 100.00% | 0.0009 | 1.0000 | 0.26 |
+| 6 | 100.00% | 0.0118 | 1.0000 | 0.26 |
+| 7 | 100.00% | 0.0052 | 1.0000 | 0.29 |
+| 8 | 100.00% | 0.0006 | 1.0000 | 0.28 |
+| 9 | 100.00% | 0.0017 | 1.0000 | 0.25 |
+
+**Overfitting checks** (`results/overfitting_check.csv`, `results/split_robustness.csv`, notebook section 5):
+
+- Train accuracy and test accuracy are both 100.00% (mean over the 10 seeds), so there is no train-to-test gap.
+- 24 rows of the dataset file are exact duplicates, and 9 of the 274 test rows also appear in the training rows. This can make test accuracy a little optimistic.
+- On 5 other random train/test splits (5 seeds each) the mean test accuracy was 99.94%. Splits 1, 2 and 4 gave 100% on every seed, and splits 3 and 5 gave 99.85% (one misclassified note in some runs).
+- For comparison, the earlier default configuration scored 99.49% ± 0.43 on the main split.
 
 ## How the experiments were run
 
@@ -247,16 +256,17 @@ Letting PSO choose scored highest, but the difference from fixed tanh is within 
 
 The two schedules that end lower looked better, but none of the differences is significant on accuracy (p >= 0.25).
 
-**Combined best settings** (`results/tuned_candidates.csv`). Combining the best single-sweep values (beta = 1.0, delta = 1.0, nearest-neighbour k = 10) at the same budget (30 particles, 100 iterations) gave 100.00% ± 0.00 against 99.74% ± 0.46 for the default. The loss is significantly lower (p = 0.015) but accuracy is not (p = 0.25). A larger swarm and more iterations (50 x 200, about 3.3 times the evaluations) gave 99.93% ± 0.15. This is a validation comparison only. `FINAL_CONFIG` and the test results above have not been changed.
+**Combined best settings** (`results/tuned_candidates.csv`). Combining the best single-sweep values (beta = 1.0, delta = 1.0, nearest-neighbour k = 10) at the same budget (30 particles, 100 iterations) gave 100.00% ± 0.00 against 99.74% ± 0.46 for the default. The loss is significantly lower (p = 0.015) but accuracy is not (p = 0.25). A larger swarm and more iterations (50 x 200, about 3.3 times the evaluations) gave 99.93% ± 0.15. The comparison was made on the validation set only. This combined setting (30 particles, 100 iterations, nearest-neighbour k = 10, β = 1.0, δ = 1.0, all other values at the default) was then adopted as the final configuration and run once on the test set. The single-sweep values were each picked from a one-at-a-time sweep and the combination was tested together only in this comparison, so it is a modest amount of tuning, not an exhaustive search.
 
 **Significance tests** (`results/significance.csv`). Paired sign-flip permutation tests (same seeds on both sides) for the key comparisons. With 10 seeds the smallest possible p-value is about 0.002, and about 20 comparisons were run without multiple-comparison correction, so p-values just under 0.05 are weak evidence. Random versus nearest-neighbour informants at k = 3 is the clearest result (p = 0.002).
 
 ### Limitations
 
-- The final configuration is the default one, not the best setting from each sweep. Several settings scored slightly higher on validation (for example 400 iterations, 50 particles, β = 1.0, or nearest with k = 10), but they were not combined or re-tested.
+- The final configuration combines three single-sweep winners (β = 1.0, δ = 1.0, k = 10) and keeps the default budget (30 particles, 100 iterations). Larger budgets (for example 400 iterations or 50 particles) also scored well on validation but were not adopted, so the comparison stays at an equal number of evaluations.
+- Every seed reached 100% test accuracy, so the test set can no longer separate this configuration from an even better one, and differences between settings at this level are within what one misclassified note would change.
 - The test set holds 274 notes, so one misclassified note changes accuracy by about 0.36 percentage points.
 - Runtime figures depend on the machine and on what else was running.
-- Sweeps vary one parameter at a time, so combinations were not tested.
+- Most sweeps vary one parameter at a time. Only the β × δ grid, the budget split and the combined-settings comparison look at more than one parameter together.
 
 ## Project structure
 
@@ -337,7 +347,7 @@ All tests should pass (35 at the time of writing). They cover the activation fun
 python main.py
 ```
 
-This loads the dataset, splits it, builds the MLP, trains it with PSO and prints the training loss and test metrics. With the default settings you should see test accuracy of roughly 99 to 100%, and it finishes in about a second. Options can be listed with `python main.py --help`, for example:
+This loads the dataset, splits it, builds the MLP, trains it with PSO and prints the training loss and test metrics. With the default settings you should see test accuracy of roughly 99 to 100%, and it finishes in about a second. The command-line defaults are the final configuration (k = 10, β = 1.0, δ = 1.0). Options can be listed with `python main.py --help`, for example:
 
 ```bash
 python main.py --hidden 8 --informants nearest --k 3 --particles 30 --iterations 100 --seed 42
@@ -367,7 +377,7 @@ Notes:
 - The notebook does not create `results/best_run.json`. That file was derived from `results/final_test.csv`: take the row with the highest `eval_accuracy`, breaking ties with the lowest `eval_loss`.
 - Seeds, the data split and the PSO settings are fixed in the code, so your numbers should match `results/` very closely. Small differences are possible if your NumPy version or CPU differs from the one used here, so compare means and spreads rather than expecting identical digits.
 
-To confirm you have reproduced the main result, check that `results/final_test.csv` has 10 rows with test accuracy between about 98.9% and 100% and a mean near 99.5%.
+To confirm you have reproduced the main result, check that `results/final_test.csv` has 10 rows with test accuracy at or very close to 100% (the mean should be 100% or within one misclassified note of it).
 
 ### 8. Make your own changes
 
