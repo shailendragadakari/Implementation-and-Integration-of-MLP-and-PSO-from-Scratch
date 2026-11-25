@@ -341,3 +341,31 @@ def test_budget_configs_have_equal_evaluations_and_grid_configs_cover_all_pairs(
     grid = make_grid_configs("beta", [0.5, 1.0], "delta", [1.0, 1.5, 2.0])
     assert len(grid) == 6 and grid["beta=0.5,delta=2.0"]["delta"] == 2.0
 
+
+
+# ---------------------------------------------------------------- GUI helpers (utils/runlog.py)
+def test_valid_splits_multiply_to_the_evaluation_budget():
+    from utils.runlog import suggest_evaluations, valid_splits
+    for n in (500, 3000, 4000):
+        splits = valid_splits(n)
+        assert splits and all(p * i == n and 5 <= p <= 200 for p, i in splits)
+    assert (30, 100) in valid_splits(3000)
+    assert valid_splits(101) == []                       # prime: no swarm size in range divides it
+    assert all(len(valid_splits(c)) >= 3 for c in suggest_evaluations(101))
+
+
+def test_run_log_appends_rows_and_keeps_columns(tmp_path):
+    import pandas as pd
+    from utils.runlog import COLUMNS, append_record, clean_csv_filename, make_record, read_log
+    cfg = dict(hidden=[8, 4], activations=["relu", "tanh"], strategy="nearest", k=3, particles=30,
+               iterations=100, alpha=0.7, beta=1.0, delta=1.0, gamma=0.5, epsilon=0.8, seed=1)
+    m = dict(accuracy=0.99, precision=0.98, recall=1.0, f1=0.99, tp=120, tn=150, fp=2, fn=0)
+    rec = make_record(cfg, m, 0.02, 0.03, 3030, 42, 77)
+    assert list(rec) == COLUMNS and rec["target_evaluations"] == 3000 and rec["activations"] == "relu|tanh"
+    path = tmp_path / "sub" / "runs.csv"
+    assert read_log(path).empty
+    assert append_record(path, rec) == 1 and append_record(path, rec) == 2
+    df = pd.read_csv(path)
+    assert list(df.columns) == COLUMNS and len(df) == 2 and df.hidden_layers[0] == "8|4"
+    assert clean_csv_filename("../a b?.CSV") == "a b_.CSV"
+    assert clean_csv_filename("") == "gui_runs.csv" and clean_csv_filename("x") == "x.csv"

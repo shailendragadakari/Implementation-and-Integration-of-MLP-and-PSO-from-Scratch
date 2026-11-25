@@ -1,4 +1,5 @@
 # Streamlit GUI for the PSO-trained MLP.   Run:  streamlit run app.py
+from datetime import datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -9,9 +10,13 @@ import streamlit as st
 from training import train_pso_mlp
 from utils.data import Standardiser, load_dataset, train_test_split
 from utils.metrics import classification_metrics, probabilities_to_labels
+from utils.runlog import (append_record, clean_csv_filename, make_record, read_log,
+                          suggest_evaluations, valid_splits)
 
 DATA = Path(__file__).parent / "data" / "data_banknote_authentication.txt"
+LOG_PATH = Path(__file__).parent / "results" / "gui_runs.csv"   # "Add to CSV" appends here
 FEATURES = ["Variance", "Skewness", "Curtosis", "Entropy"]
+ACTIVATIONS = ["tanh", "sigmoid", "relu"]
 
 st.set_page_config(page_title="PSO-trained MLP", layout="wide")
 
@@ -35,7 +40,58 @@ def convergence_fig(best, mean=None):
     return fig
 
 
+# Particles x iterations are tied to the chosen number of solution evaluations: only exact
+# divisors of that number can be selected, so the product always equals it. Changing the
+# evaluations, the particles or the iterations re-adjusts the other two.
+def _ss():
+    return st.session_state
+
+
+# The linked values are kept in plain session keys (p_val, it_val). The slider widgets are
+# filled from them on every run, because Streamlit forgets a widget's own state whenever the
+# widget is not drawn (for example while the typed evaluations cannot be split).
+def on_evals_change():
+    splits = valid_splits(_ss()["evals"])
+    if splits:
+        ps = [p for p, _ in splits]
+        cur = _ss()["p_val"]
+        p = cur if cur in ps else min(ps, key=lambda x: abs(x - cur))  # keep the closest swarm size
+        _ss()["p_val"], _ss()["it_val"] = p, _ss()["evals"] // p
+
+
+def on_particles_change():
+    _ss()["p_val"] = _ss()["n_particles"]
+    _ss()["it_val"] = _ss()["evals"] // _ss()["p_val"]
+
+
+def on_iterations_change():
+    _ss()["it_val"] = _ss()["n_iterations"]
+    _ss()["p_val"] = _ss()["evals"] // _ss()["it_val"]
+
+
+@st.dialog("Export CSV")
+def export_dialog():
+    # Asks for a file name, then offers the run log as a download under that name.
+    if not LOG_PATH.exists() or LOG_PATH.stat().st_size == 0:
+        st.warning("The CSV is empty. Train a network and press **Add to CSV** first.")
+        return
+    name = st.text_input("File name", value=LOG_PATH.name,
+                         help="Rename the file before it is downloaded. '.csv' is added if missing.")
+    final_name = clean_csv_filename(name, default=LOG_PATH.name)
+    st.caption(f"{len(read_log(LOG_PATH))} row(s) will be downloaded as **{final_name}**")
+    try:
+        st.download_button("Download", LOG_PATH.read_bytes(), file_name=final_name, mime="text/csv",
+                           type="primary", on_click="ignore")
+    except TypeError:  # older Streamlit without on_click="ignore"
+        st.download_button("Download", LOG_PATH.read_bytes(), file_name=final_name, mime="text/csv",
+                           type="primary")
+
+
 # ------------------------------------------------------------------ sidebar
+_ss().setdefault("evals", 3000)
+_ss().setdefault("p_val", 30)
+_ss().setdefault("it_val", 100)
+_ss().setdefault("added_ids", set())
 sb = st.sidebar
 sb.header("Data")
 split_seed = sb.number_input("Train/test split seed", 0, 10_000, 42)
@@ -46,11 +102,25 @@ hidden, acts = [], []
 for i in range(n_layers):
     c1, c2 = sb.columns(2)
     hidden.append(c1.number_input(f"Units L{i+1}", 1, 64, 8, key=f"u{i}"))
-    acts.append(c2.selectbox(f"Act. L{i+1}", ["tanh", "sigmoid"], key=f"a{i}"))
+    acts.append(c2.selectbox(f"Act. L{i+1}", ACTIVATIONS, key=f"a{i}"))
 
 sb.header("PSO")
-particles = sb.slider("Particles", 5, 200, 30)
-iterations = sb.slider("Iterations", 10, 500, 100, step=10)
+sb.number_input("Solution evaluations (particles × iterations)", min_value=100, max_value=200_000,
+                step=100, key="evals", on_change=on_evals_change,
+                help="Budget for one PSO run. The Particles and Iterations sliders below only offer "
+                     "values whose product equals this number, and each follows the other.")
+splits = valid_splits(_ss()["evals"])
+if splits:
+    _ss()["n_particles"], _ss()["n_iterations"] = _ss()["p_val"], _ss()["it_val"]  # fill the sliders
+    particles = sb.select_slider("Particles (swarm size)", options=[p for p, _ in splits],
+                                 key="n_particles", on_change=on_particles_change)
+    iterations = sb.select_slider("Iterations", options=sorted(i for _, i in splits),
+                                  key="n_iterations", on_change=on_iterations_change)
+    sb.caption(f"{particles} × {iterations} = {particles * iterations:,} solution evaluations")
+else:
+    particles, iterations = int(_ss()["p_val"]), int(_ss()["it_val"])
+    sb.error(f"{_ss()['evals']:,} cannot be split into a swarm size of 5–200 and 2–1000 iterations. "
+             f"Try one of: {', '.join(f'{c:,}' for c in suggest_evaluations(_ss()['evals']))}.")
 strategy = sb.radio("Informant selection", ["nearest", "random"],
                     format_func=lambda s: "Nearest neighbour (Euclidean)" if s == "nearest" else "Random",
                     horizontal=False)
@@ -73,13 +143,14 @@ dim = sum(a * b + b for a, b in zip([4] + hidden, hidden + [1]))
 st.title("Banknote authentication: MLP trained with PSO")
 st.caption(f"Architecture 4 → {' → '.join(str(h) for h in hidden)} → 1 · "
            f"{dim} parameters = PSO search-space dimension · "
-           f"{particles * (iterations + 1):,} fitness evaluations")
+           f"{particles} × {iterations} = {particles * iterations:,} solution evaluations "
+           f"({particles * (iterations + 1):,} fitness calls including the initial swarm)")
 
 tab_train, tab_results, tab_predict, tab_data = st.tabs(["Train", "Results", "Predict", "Data"])
 
 # ------------------------------------------------------------------ train
 with tab_train:
-    if st.button("Train network with PSO", type="primary"):
+    if st.button("Train network with PSO", type="primary", disabled=not splits):
         bar = st.progress(0.0, text="Starting…")
         status = st.empty()
         chart = st.empty()
@@ -99,7 +170,8 @@ with tab_train:
             network=network, config=config, scaler=scaler, metrics=m,
             best=list(pop.history["global_best"]), mean=list(pop.history["mean_fitness"]),
             best_loss=pop.global_best_fitness, test_loss=loss.compute(y_te, probs),
-            evals=pop.n_evaluations)
+            evals=pop.n_evaluations, split_seed=int(split_seed), n_params=dim,
+            run_id=f"{datetime.now():%Y%m%d%H%M%S%f}")
         bar.progress(1.0, text="Done")
         status.empty()
         st.success("Training finished. See the Results and Predict tabs.")
@@ -137,6 +209,31 @@ with tab_results:
                                .to_csv(index_label="iteration"), "convergence.csv", "text/csv")
         with st.expander("Hyperparameters used for this run"):
             st.json({k_: v for k_, v in run["config"].items()})
+
+        st.subheader("Record this run")
+        st.caption(f"'Add to CSV' appends this run's parameters and results to `{LOG_PATH.relative_to(LOG_PATH.parent.parent)}`; "
+                   "'Export to CSV' downloads that file under a name you choose.")
+        b1, b2, _ = st.columns([1, 1, 4])
+        if b1.button("Add to CSV", key="add_csv"):
+            if run["run_id"] in _ss()["added_ids"]:
+                st.info("This run is already in the CSV. Train again to add another row.")
+            else:
+                try:
+                    n_rows = append_record(LOG_PATH, make_record(
+                        run["config"], run["metrics"], run["best_loss"], run["test_loss"],
+                        run["evals"], run["split_seed"], run["n_params"]))
+                    _ss()["added_ids"].add(run["run_id"])
+                    st.success(f"Added to the CSV ({n_rows} row{'s' if n_rows != 1 else ''} in total).")
+                except OSError as e:
+                    st.error(f"Could not write {LOG_PATH}: {e}")
+        if b2.button("Export to CSV", key="export_csv"):
+            export_dialog()
+        log = read_log(LOG_PATH)
+        with st.expander(f"Runs recorded in the CSV ({len(log)})", expanded=len(log) > 0):
+            if len(log):
+                st.dataframe(log, width="stretch")
+            else:
+                st.caption("No runs recorded yet.")
 
 # ------------------------------------------------------------------ predict
 with tab_predict:

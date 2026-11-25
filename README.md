@@ -274,7 +274,7 @@ The two schedules that end lower looked better, but none of the differences is s
 data/           banknote dataset (data_banknote_authentication.txt)
 mlp/            MLP from scratch: activations, losses, layer, network, builder
 pso/            PSO from scratch: fitness interface, particle, informant strategies, population (with boundary handling and inertia schedule)
-utils/          dataset loading, stratified split, standardiser, classification metrics
+utils/          dataset loading, stratified split, standardiser, classification metrics, and the GUI run-log helpers (`runlog.py`)
 adapter.py      couples the MLP to PSO (the only place that knows both)
 training.py     shared helper that builds the network and trains it with PSO
 main.py         command-line run (one training run)
@@ -339,7 +339,7 @@ Your prompt should now start with `(.venv)`. Run every command below from the pr
 pytest tests -q
 ```
 
-All tests should pass (35 at the time of writing). They cover the activation functions (including ReLU), the boundary modes, the inertia schedule, the activation-gene adapter, losses, layers, network, builder, PSO components, the data utilities, and a check that `mlp/` and `pso/` do not import each other.
+All tests should pass (37 at the time of writing). They cover the activation functions (including ReLU), the boundary modes, the inertia schedule, the activation-gene adapter, losses, layers, network, builder, PSO components, the data utilities, and a check that `mlp/` and `pso/` do not import each other.
 
 ### 5. Run one training run
 
@@ -363,6 +363,15 @@ streamlit run app.py
 ```
 
 Streamlit prints a local address (normally http://localhost:8501) and opens it in your browser. The sidebar sets the network and PSO hyperparameters, and the tabs let you train a single run and inspect the convergence curve, the results, individual predictions and the data. Stop the app with Ctrl+C in the terminal.
+
+**Choosing the budget.** The *Solution evaluations* box sets the budget for one PSO run (particles × iterations, for example 30 × 100 = 3,000). The *Particles* and *Iterations* sliders only offer pairs whose product equals that number, and moving one moves the other (for example 3,000 → 50 particles gives 60 iterations). If the number has no valid split (for instance a prime such as 101) the app says so and suggests nearby budgets. Note that PSO also evaluates the initial swarm once, so the real number of fitness calls is particles × (iterations + 1); the sidebar shows both, and the *fitness_calls* column in the CSV records the exact count.
+
+**Hidden-layer activations** can be `tanh`, `sigmoid` or `relu` per layer.
+
+**Recording your own runs.** After training, the Results tab has two buttons:
+
+- *Add to CSV* appends one row (the parameters the network was trained with and its results: training loss, test loss, accuracy, precision, recall, F1 and the confusion counts) to `results/gui_runs.csv`. The same run cannot be added twice by accident. The file is created on first use and kept between sessions.
+- *Export to CSV* opens a dialog that asks for a file name and then downloads the file under that name (`.csv` is added if missing). Delete `results/gui_runs.csv` to start a fresh log.
 
 ### 7. Reproduce the experiments and the results files
 
