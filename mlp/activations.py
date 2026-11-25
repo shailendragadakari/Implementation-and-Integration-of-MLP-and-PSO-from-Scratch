@@ -54,7 +54,7 @@ class Softmax(ActivationFunction):
 
 
 # Lookup table: the word used in a configuration -> the class to create.
-_REGISTRY = {"sigmoid": Sigmoid, "tanh": Tanh, "softmax": Softmax}
+_REGISTRY = {"sigmoid": Sigmoid, "tanh": Tanh, "relu": ReLU, "softmax": Softmax}
 
 
 def get_activation(name: str) -> ActivationFunction:
