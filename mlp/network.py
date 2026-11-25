@@ -23,6 +23,15 @@ class Network:
         # Return probabilities/outputs. Converting to labels is a separate step.
         return self.forward(X)
 
+    def set_hidden_activations(self, activations) -> None:
+        # Replace the activation of each HIDDEN layer (the output layer is left alone,
+        # because its activation is fixed by the task).
+        hidden = self.layers[:-1]
+        if len(activations) != len(hidden):
+            raise ValueError(f"Expected {len(hidden)} activations, got {len(activations)}")
+        for layer, act in zip(hidden, activations):
+            layer.set_activation(act)
+
     def count_parameters(self) -> int:
         # This is D, the length of the vector PSO searches over.
         return sum(layer.count_parameters() for layer in self.layers)

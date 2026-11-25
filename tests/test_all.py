@@ -8,9 +8,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from adapter import MLPFitnessAdapter
+from adapter import MLPFitnessAdapter, MLPFitnessAdapterWithActivations
+from experiments import make_budget_configs, make_grid_configs
 from mlp import (BinaryCrossEntropy, CategoricalCrossEntropy, Layer, MLPBuilder, MSE,
-                 Network, Sigmoid, Softmax, Tanh)
+                 Network, ReLU, Sigmoid, Softmax, Tanh)
 from pso import (FitnessFunction, NearestNeighbourInformantSelection, Particle, Population,
                  RandomInformantSelection)
 from utils.data import Standardiser, load_dataset, train_test_split
@@ -261,3 +262,82 @@ def test_optimise_callback_called_each_iteration():
     pop.optimise(callback=lambda it, p: calls.append((it, p.global_best_fitness)))
     assert [c[0] for c in calls] == list(range(11))
     assert [c[1] for c in calls] == pop.history["global_best"]
+
+
+# ---------------- extensions: ReLU, boundary handling, inertia schedule, activation genes ----------------
+def test_relu_values_and_builder_accepts_it():
+    assert np.array_equal(ReLU().forward(np.array([-1.0, 0.0, 2.0])), np.array([0.0, 0.0, 2.0]))
+    net, _, X, _ = build(hidden=(4,), acts=("relu",))
+    h = np.maximum(0.0, X @ net.layers[0].weights + net.layers[0].biases)
+    out = Sigmoid().forward(h @ net.layers[1].weights + net.layers[1].biases)
+    assert np.allclose(net.forward(X), out)
+
+
+@pytest.mark.parametrize("mode", ["clamp", "reflect", "random"])
+def test_boundary_modes_keep_particles_inside_box(mode):
+    seen = []
+
+    def cb(i, pop):
+        seen.append(max(np.abs(p.position).max() for p in pop.particles))
+
+    pop = Population(Sphere(), NearestNeighbourInformantSelection(), 15, 3, 40, 4,
+                     inertia_weight=0.9, cognitive_coefficient=2.5, social_coefficient=2.5,
+                     init_range=2.0, boundary=mode, bound=2.0, seed=3)
+    pop.optimise(callback=cb)
+    assert max(seen) <= 2.0 + 1e-12
+
+
+def test_boundary_none_is_unbounded_and_invalid_mode_rejected():
+    pop = Population(Sphere(), NearestNeighbourInformantSelection(), 15, 3, 40, 4,
+                     inertia_weight=1.0, cognitive_coefficient=2.5, social_coefficient=2.5,
+                     init_range=1.0, seed=3)
+    pop.optimise()
+    assert max(np.abs(p.position).max() for p in pop.particles) > 1.0
+    with pytest.raises(ValueError):
+        Population(Sphere(), RandomInformantSelection(), 5, 2, 10, 2, boundary="wrap")
+
+
+def test_boundary_reflect_and_clamp_exact_values():
+    pop = Population(Sphere(), RandomInformantSelection(), 5, 2, 10, 2, boundary="reflect", bound=1.0)
+    p = Particle(np.array([1.5, -1.25, 0.5]), np.array([1.0, -1.0, 0.2]))
+    pop._apply_boundary(p)
+    assert np.allclose(p.position, [0.5, -0.75, 0.5]) and np.allclose(p.velocity, [-1.0, 1.0, 0.2])
+    pop.boundary = "clamp"
+    q = Particle(np.array([1.5, -1.25, 0.5]), np.array([1.0, -1.0, 0.2]))
+    pop._apply_boundary(q)
+    assert np.allclose(q.position, [1.0, -1.0, 0.5]) and np.allclose(q.velocity, [0.0, 0.0, 0.2])
+
+
+def test_linear_inertia_schedule_and_constant_default():
+    c = Population(Sphere(), RandomInformantSelection(), 5, 2, 11, 2, inertia_weight=0.9)
+    assert all(c._alpha_at(t) == 0.9 for t in range(11))
+    lin = Population(Sphere(), RandomInformantSelection(), 5, 2, 11, 2, inertia_weight=0.9,
+                     inertia_schedule="linear", inertia_end=0.4)
+    assert lin._alpha_at(0) == pytest.approx(0.9) and lin._alpha_at(10) == pytest.approx(0.4)
+    assert all(a >= b for a, b in zip([lin._alpha_at(t) for t in range(10)],
+                                      [lin._alpha_at(t) for t in range(1, 11)]))
+
+
+def test_adapter_with_activation_genes_decodes_and_installs():
+    net, loss, X, y = build(hidden=(5, 3), acts=("tanh", "tanh"))
+    ad = MLPFitnessAdapterWithActivations(net, loss, X, y, choices=("sigmoid", "tanh", "relu"))
+    assert ad.dimension == net.count_parameters() + 2
+    base = np.zeros(ad.n_weights)
+    # very negative -> first choice, ~0 -> middle choice, very positive -> last choice
+    assert ad.decode_activations(np.concatenate([base, [-50.0, 50.0]])) == ["sigmoid", "relu"]
+    assert ad.decode_activations(np.concatenate([base, [0.0, 0.0]])) == ["tanh", "tanh"]
+    pos = np.concatenate([np.random.default_rng(1).normal(size=ad.n_weights), [50.0, -50.0]])
+    f = ad.evaluate(pos)
+    assert np.isscalar(f) or np.ndim(f) == 0
+    assert isinstance(net.layers[0].activation, ReLU) and isinstance(net.layers[1].activation, Sigmoid)
+    assert isinstance(net.layers[2].activation, Sigmoid)  # output layer untouched
+    with pytest.raises(ValueError):
+        ad.install(np.zeros(ad.dimension - 1))
+
+
+def test_budget_configs_have_equal_evaluations_and_grid_configs_cover_all_pairs():
+    cfgs = make_budget_configs(500)
+    assert {c["particles"] * (c["iterations"] + 1) for c in cfgs.values()} == {500}
+    grid = make_grid_configs("beta", [0.5, 1.0], "delta", [1.0, 1.5, 2.0])
+    assert len(grid) == 6 and grid["beta=0.5,delta=2.0"]["delta"] == 2.0
+

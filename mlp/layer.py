@@ -25,6 +25,10 @@ class Layer:
         # and apply the activation.
         return self.activation.forward(X @ self.weights + self.biases)
 
+    def set_activation(self, activation: ActivationFunction) -> None:
+        # Swap the activation object (used when PSO also searches over activation functions).
+        self.activation = activation
+
     def count_parameters(self) -> int:
         return self.n_in * self.n_out + self.n_out  # weights + biases
 

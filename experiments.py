@@ -14,9 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from adapter import MLPFitnessAdapter
-from mlp import MLPBuilder
-from pso import NearestNeighbourInformantSelection, Population, RandomInformantSelection
+from training import train_pso_mlp
 from utils.data import Standardiser, load_dataset, train_test_split
 from utils.metrics import classification_metrics, probabilities_to_labels
 
@@ -51,31 +49,17 @@ def run_trial(config, seed, train, evaluate):
     X_ev, y_ev = evaluate
     t0 = time.perf_counter()
 
-    builder = MLPBuilder(seed=seed).set_dataset(X_tr, y_tr)
-    builder.set_configuration({"hidden_layers": config["hidden"],
-                               "activations": config["activations"],
-                               "task": "binary_classification"})
-    network, loss = builder.build()
-    fitness = MLPFitnessAdapter(network, loss, X_tr, y_tr)
-    strategy = (NearestNeighbourInformantSelection() if config["strategy"] == "nearest"
-                else RandomInformantSelection(seed=seed))
-    pop = Population(
-        fitness_function=fitness, informant_strategy=strategy,
-        num_particles=config["particles"], num_informants=config["k"],
-        num_iterations=config["iterations"], dimension=network.count_parameters(),
-        inertia_weight=config["alpha"], cognitive_coefficient=config["beta"],
-        social_coefficient=config["delta"], global_coefficient=config["gamma"],
-        step_size=config["epsilon"], seed=seed,
-    )
-    best_pos, best_fit = pop.optimise()
-    network.set_parameters(best_pos)
+    # Same build-and-train path as main.py / the GUI (adds optional extensions via config keys).
+    network, loss, pop = train_pso_mlp(X_tr, y_tr, {**config, "seed": seed})
+    best_fit = pop.global_best_fitness
 
     probs = network.predict(X_ev)
     m = classification_metrics(y_ev, probabilities_to_labels(probs))
     hist = np.array(pop.history["global_best"])
     within5 = np.where(hist <= hist[-1] * 1.05 + 1e-12)[0]
     return {
-        "seed": seed, "dimension": network.count_parameters(),
+        "seed": seed, "dimension": pop.dimension,
+        "activations_used": "|".join(type(l.activation).__name__.lower() for l in network.layers[:-1]),
         "train_loss": best_fit,
         "eval_loss": loss.compute(y_ev, probs),
         "eval_accuracy": m["accuracy"], "eval_precision": m["precision"],
@@ -127,6 +111,129 @@ def run_experiment(configs, seeds, data, mode="val", n_jobs=None):
         r["label"] = label
         r.update({f"cfg_{k}": (str(v) if isinstance(v, list) else v) for k, v in cfg.items()})
     return results
+
+
+# --------------------------------------------------------------------------- extra experiments
+def make_budget_configs(budget=500, particle_counts=(10, 20, 25, 50, 100), base=None):
+    # Same evaluation budget, different swarm size / iteration split.
+    #     evaluations = particles * (iterations + 1)  (the +1 is the initial evaluation),
+    #     so iterations = budget / particles - 1 keeps every config at the same total.
+    base = base or DEFAULT_CONFIG
+    out = {}
+    for n in particle_counts:
+        if budget % n:
+            continue
+        c = deepcopy(base)
+        c["particles"], c["iterations"] = n, budget // n - 1
+        c["k"] = min(c["k"], n - 1)
+        out[f"{n}x{c['iterations']}"] = c
+    return out
+
+
+def make_grid_configs(param_a, values_a, param_b, values_b, base=None):
+    # One config for every combination of two hyperparameters. Labels look like "a=0.5,b=1.0".
+    base = base or DEFAULT_CONFIG
+    out = {}
+    for a in values_a:
+        for b in values_b:
+            c = deepcopy(base)
+            c[param_a], c[param_b] = a, b
+            out[f"{param_a}={a},{param_b}={b}"] = c
+    return out
+
+
+def compare_configs(name_a, name_b, results, metric="eval_accuracy"):
+    # Paired sign-flip permutation test between two labelled configs in `results` (same seeds).
+    #     Returns a dict row: mean(a) - mean(b) and the p-value.
+    df = to_frame(results)
+    a = df[df.label == name_a].sort_values("seed")[metric].values
+    b = df[df.label == name_b].sort_values("seed")[metric].values
+    diff, p = paired_permutation_test(a, b)
+    return {"a": name_a, "b": name_b, "metric": metric, "mean_a": float(a.mean()),
+            "mean_b": float(b.mean()), "mean_diff_a_minus_b": diff, "p_value": p}
+
+
+def extra_experiment_configs():
+    # All the extra experiments, as {name: {label: config}}. The names are also the CSV file names.
+    #     budget_split_*     : same number of evaluations, different swarm size / iterations
+    #     pso_beta_delta_grid: cognitive (beta) x informant (delta) balance
+    #     pso_boundary       : boundary-handling modes (extension)
+    #     activation_genes   : fixed tanh / sigmoid / relu vs PSO choosing the activations (extension)
+    #     pso_inertia_schedule: constant vs linearly decreasing inertia (extension)
+    #     tuned_candidates   : best single-sweep settings combined, vs the default
+    #     informants_k3      : random vs nearest-neighbour at k=3 (for the paired test)
+    out = {
+        "budget_split_500": make_budget_configs(500),
+        "budget_split_3000": make_budget_configs(3000, (10, 20, 30, 50, 100)),
+        "pso_beta_delta_grid": make_grid_configs("beta", [0.5, 1.0, 1.5, 2.0], "delta", [0.5, 1.0, 1.5, 2.0]),
+    }
+    boundary = {"none": dict(DEFAULT_CONFIG)}
+    for B in (2.0, 5.0):
+        for mode in ("clamp", "reflect", "random"):
+            c = deepcopy(DEFAULT_CONFIG); c["boundary"], c["bound"] = mode, B
+            boundary[f"{mode}-B{B:g}"] = c
+    out["pso_boundary"] = boundary
+
+    acts = {}
+    for name in ("tanh", "sigmoid", "relu"):
+        c = deepcopy(DEFAULT_CONFIG); c["activations"] = [name]; acts[name] = c
+    c = deepcopy(DEFAULT_CONFIG); c["evolve_activations"] = True
+    acts["evolved"] = c
+    out["activation_genes"] = acts
+
+    sched = {"constant-0.7": dict(DEFAULT_CONFIG)}
+    for a0, a1 in ((0.9, 0.4), (0.8, 0.5), (0.9, 0.2)):
+        c = deepcopy(DEFAULT_CONFIG)
+        c["alpha"], c["inertia_schedule"], c["inertia_end"] = a0, "linear", a1
+        sched[f"linear-{a0}to{a1}"] = c
+    out["pso_inertia_schedule"] = sched
+
+    tuned_same = deepcopy(DEFAULT_CONFIG)
+    tuned_same.update(beta=1.0, delta=1.0, k=10)
+    tuned_big = deepcopy(tuned_same); tuned_big.update(particles=50, iterations=200)
+    out["tuned_candidates"] = {"default": dict(DEFAULT_CONFIG),
+                               "tuned-same-budget": tuned_same,
+                               "tuned-50x200": tuned_big}
+    ks = {}
+    for strat in ("random", "nearest"):
+        c = deepcopy(DEFAULT_CONFIG); c["strategy"] = strat; c["k"] = 3
+        ks[f"{strat}-k3"] = c
+    out["informants_k3"] = ks
+    return out
+
+
+def significance_table(all_results):
+    # Paired sign-flip tests for the key comparisons. `all_results` is {name: results list}
+    #     as produced by running extra_experiment_configs(). Each test pairs runs by seed.
+    pairs = [
+        ("informants_k3", "nearest-k3", "random-k3"),
+        ("budget_split_500", "50x9", "10x49"),
+        ("budget_split_3000", "100x29", "10x299"),
+        ("pso_boundary", "clamp-B5", "none"), ("pso_boundary", "reflect-B5", "none"),
+        ("pso_boundary", "random-B5", "none"), ("pso_boundary", "clamp-B2", "none"),
+        ("pso_boundary", "reflect-B2", "none"), ("pso_boundary", "random-B2", "none"),
+        ("activation_genes", "relu", "tanh"), ("activation_genes", "sigmoid", "tanh"),
+        ("activation_genes", "evolved", "tanh"),
+        ("pso_inertia_schedule", "linear-0.9to0.4", "constant-0.7"),
+        ("pso_inertia_schedule", "linear-0.8to0.5", "constant-0.7"),
+        ("pso_inertia_schedule", "linear-0.9to0.2", "constant-0.7"),
+        ("tuned_candidates", "tuned-same-budget", "default"),
+        ("tuned_candidates", "tuned-50x200", "default"),
+    ]
+    rows = []
+    for name, a, b in pairs:
+        if name not in all_results:
+            continue
+        labels = {r["label"] for r in all_results[name]}
+        if a not in labels or b not in labels:
+            continue
+        for metric in ("eval_accuracy", "eval_loss"):
+            row = compare_configs(a, b, all_results[name], metric)
+            row["experiment"] = name
+            rows.append(row)
+    import pandas as pd
+    return pd.DataFrame(rows)[["experiment", "a", "b", "metric", "mean_a", "mean_b",
+                               "mean_diff_a_minus_b", "p_value"]]
 
 
 # --------------------------------------------------------------------------- analysis

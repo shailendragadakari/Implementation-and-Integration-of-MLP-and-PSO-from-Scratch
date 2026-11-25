@@ -23,6 +23,9 @@ Everything the notebook produces is in the `results/` folder.
 | `results/pso_iterations.csv`, `pso_particles.csv` | Iteration-count and swarm-size sweeps (validation set). |
 | `results/mlp_width.csv`, `mlp_depth.csv`, `mlp_activation.csv` | Network-size and activation sweeps (validation set). |
 | `results/informants.csv` | Informant strategy (random vs nearest) against the number of informants k (validation set). |
+| `results/budget_split_500.csv`, `budget_split_3000.csv`, `pso_beta_delta_grid.csv`, `pso_boundary.csv`, `activation_genes.csv`, `pso_inertia_schedule.csv`, `tuned_candidates.csv`, `informants_k3.csv` | Extra experiments (validation set), see "Extensions and extra experiments". |
+| `results/significance.csv` | Paired permutation tests for the key comparisons. |
+| `results/figures/` | PNG plots for the extra experiments. |
 
 Each sweep CSV has one row per seed and setting. Useful columns are `eval_accuracy`, `eval_loss`, `eval_f1`, `train_loss`, `iters_to_within_5pct` (how quickly the run converged), `evaluations`, `seconds`, and the `cfg_*` columns that record the configuration used.
 
@@ -181,6 +184,73 @@ Nearest-neighbour informants were much better than random ones when k is small: 
 | `nearest-k20` | 99.93% ± 0.15 | 0.0023 | 97.6 |
 | `nearest-k29` | 99.96% ± 0.12 | 0.0018 | 97.8 |
 
+## Extensions and extra experiments
+
+These go beyond the minimum specification. All of them are switched off by default, so the default behaviour is exactly the plain algorithm and the results above are unchanged (checked: seeds 0 and 6 of the final run reproduce the same test accuracy and loss). They use the same protocol as the sweeps (train on the fit set, compare on the validation set, 10 seeds), and the numbers below are validation accuracy (mean ± sd) from the CSVs named in each heading. Run them with `python run_extra_experiments.py` or from section 3b of the notebook.
+
+**Added to the code**
+
+- **ReLU activation** (`mlp/activations.py`), alongside sigmoid and tanh, usable as `"relu"` in any configuration.
+- **Boundary handling** (`pso/population.py`): `boundary="none" | "clamp" | "reflect" | "random"` with a box half-width `bound`. Clamp puts the coordinate on the wall and zeroes that velocity component, reflect bounces it back and reverses the velocity component, random re-draws the coordinate inside the box.
+- **Linearly decreasing inertia** (`pso/population.py`): `inertia_schedule="linear"` moves alpha from `inertia_weight` to `inertia_end` over the run.
+- **PSO chooses the hidden activations** (`adapter.py`, `MLPFitnessAdapterWithActivations`): the particle vector gets one extra gene per hidden layer. Each gene is squashed with tanh and cut into equal bins (sigmoid, tanh, relu), so any real value decodes to a valid choice. PSO is unchanged and still sees only a longer vector and a scalar fitness.
+- **Algorithm 39 line references** in the comments of `pso/population.py` and `pso/particle.py`. These numbers were written from memory of the algorithm in *Essentials of Metaheuristics* and should be checked against the book or the Week 7 slides before submission.
+- `training.py` and `experiments.py` accept the new options through optional config keys (`boundary`, `bound`, `inertia_schedule`, `inertia_end`, `evolve_activations`).
+
+**Fixed budget** (`results/budget_split_500.csv`, `results/budget_split_3000.csv`). Evaluations are particles × (iterations + 1), so each row spends the same total.
+
+| Particles x iterations (budget 500) | Validation accuracy | Particles x iterations (budget 3000) | Validation accuracy |
+|---|---|---|---|
+| `10x49` | 97.63% ± 1.51 | `10x299` | 99.82% ± 0.35 |
+| `20x24` | 96.79% ± 1.53 | `20x149` | 99.96% ± 0.12 |
+| `25x19` | 96.72% ± 1.37 | `30x99` | 99.74% ± 0.46 |
+| `50x9` | 95.18% ± 1.67 | `50x59` | 99.71% ± 0.48 |
+| `100x4` | 93.47% ± 2.28 | `100x29` | 98.69% ± 0.71 |
+
+With a small budget, fewer particles and more iterations did better. At 3000 the middle (20 particles) was best and a large swarm with few iterations was worst. The difference between the smallest and largest swarm is significant in both budgets (paired test, p < 0.05, see `results/significance.csv`).
+
+**Cognitive beta and informant delta** (`results/pso_beta_delta_grid.csv`). Delta matters far more than beta: with delta = 0.5 or 2.0 every beta gives only about 95 to 97%, while delta = 1.5 gives 99.7 to 99.96% for beta up to 1.5. The best cell was beta = 1.0 with delta = 1.5 (99.96% ± 0.12).
+
+**Boundary handling** (`results/pso_boundary.csv`)
+
+| Mode | Validation accuracy |
+|---|---|
+| `none` (default) | 99.74% ± 0.46 |
+| `clamp`, B = 2 | 99.85% ± 0.19 |
+| `clamp`, B = 5 | 99.82% ± 0.31 |
+| `reflect`, B = 5 | 99.49% ± 0.43 |
+| `random`, B = 5 | 99.16% ± 1.00 |
+| `reflect`, B = 2 | 98.91% ± 1.32 |
+| `random`, B = 2 | 97.85% ± 1.67 |
+
+Clamping matched or slightly beat no boundary. Reflect and especially random re-initialisation were worse, most clearly with the tight box (B = 2). Clamp versus none was not a significant difference.
+
+**Activation genes** (`results/activation_genes.csv`)
+
+| Hidden activation | Validation accuracy |
+|---|---|
+| `evolved` (PSO chooses) | 99.96% ± 0.12 |
+| `tanh` | 99.74% ± 0.46 |
+| `sigmoid` | 99.56% ± 0.68 |
+| `relu` | 99.16% ± 1.00 |
+
+Letting PSO choose scored highest, but the difference from fixed tanh is within the seed-to-seed spread (p = 0.38 for accuracy, 0.06 for loss), so treat it as suggestive, not proven. The evolved run also has one extra dimension per hidden layer.
+
+**Inertia schedule** (`results/pso_inertia_schedule.csv`)
+
+| Inertia | Validation accuracy |
+|---|---|
+| constant 0.7 (default) | 99.74% ± 0.46 |
+| linear 0.9 to 0.4 | 99.56% ± 0.94 |
+| linear 0.8 to 0.5 | 99.93% ± 0.15 |
+| linear 0.9 to 0.2 | 100.00% ± 0.00 |
+
+The two schedules that end lower looked better, but none of the differences is significant on accuracy (p >= 0.25).
+
+**Combined best settings** (`results/tuned_candidates.csv`). Combining the best single-sweep values (beta = 1.0, delta = 1.0, nearest-neighbour k = 10) at the same budget (30 particles, 100 iterations) gave 100.00% ± 0.00 against 99.74% ± 0.46 for the default. The loss is significantly lower (p = 0.015) but accuracy is not (p = 0.25). A larger swarm and more iterations (50 x 200, about 3.3 times the evaluations) gave 99.93% ± 0.15. This is a validation comparison only. `FINAL_CONFIG` and the test results above have not been changed.
+
+**Significance tests** (`results/significance.csv`). Paired sign-flip permutation tests (same seeds on both sides) for the key comparisons. With 10 seeds the smallest possible p-value is about 0.002, and about 20 comparisons were run without multiple-comparison correction, so p-values just under 0.05 are weak evidence. Random versus nearest-neighbour informants at k = 3 is the clearest result (p = 0.002).
+
 ### Limitations
 
 - The final configuration is the default one, not the best setting from each sweep. Several settings scored slightly higher on validation (for example 400 iterations, 50 particles, β = 1.0, or nearest with k = 10), but they were not combined or re-tested.
@@ -193,13 +263,14 @@ Nearest-neighbour informants were much better than random ones when k is small: 
 ```
 data/           banknote dataset (data_banknote_authentication.txt)
 mlp/            MLP from scratch: activations, losses, layer, network, builder
-pso/            PSO from scratch: fitness interface, particle, informant strategies, population
+pso/            PSO from scratch: fitness interface, particle, informant strategies, population (with boundary handling and inertia schedule)
 utils/          dataset loading, stratified split, standardiser, classification metrics
 adapter.py      couples the MLP to PSO (the only place that knows both)
 training.py     shared helper that builds the network and trains it with PSO
 main.py         command-line run (one training run)
 app.py          Streamlit GUI (train and inspect one run)
-experiments.py  experiment helpers (data protocol, sweeps, statistics, plots)
+experiments.py  experiment helpers (data protocol, sweeps, statistics, plots, extra experiments)
+run_extra_experiments.py  command-line runner for the extra experiments
 experiments.ipynb  the experiment notebook that writes results/
 tests/          automatic checks (pytest)
 results/        CSV and JSON outputs of the experiments
@@ -258,7 +329,7 @@ Your prompt should now start with `(.venv)`. Run every command below from the pr
 pytest tests -q
 ```
 
-All tests should pass. They cover the activation functions, losses, layers, network, builder, PSO components, the data utilities, and a check that `mlp/` and `pso/` do not import each other.
+All tests should pass (35 at the time of writing). They cover the activation functions (including ReLU), the boundary modes, the inertia schedule, the activation-gene adapter, losses, layers, network, builder, PSO components, the data utilities, and a check that `mlp/` and `pso/` do not import each other.
 
 ### 5. Run one training run
 
@@ -287,7 +358,7 @@ Streamlit prints a local address (normally http://localhost:8501) and opens it i
 
 1. Open `experiments.ipynb` in VS Code and choose the `.venv` environment as the kernel (top-right "Select Kernel").
 2. For a quick dry run, change the line `N_SEEDS = int(os.environ.get("N_SEEDS", 10))` in the first code cell to `N_SEEDS = 3` (or set the `N_SEEDS` environment variable before starting the notebook server). Leave it as it is for the full 10 seeds used in this README.
-3. Run all cells. The notebook runs the baseline, every sweep, the informant comparison and the final test evaluation, and in its last cell saves the CSV files and `run_info.json` into `results/`.
+3. Run all cells. The notebook runs the baseline, every sweep, the informant comparison, the extra experiments (section 3b) and the final test evaluation, and in its last cell saves the CSV files and `run_info.json` into `results/`.
 
 Notes:
 
