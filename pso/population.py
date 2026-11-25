@@ -1,8 +1,10 @@
 # Population class. Owns the particles, global best and the main loop.
 #
-# "Alg. 39 line N" comments refer to Algorithm 39 (PSO with informants) in Luke,
-# "Essentials of Metaheuristics", Section 3.5, as numbered in the Week 7 lecture slides.
-# NOTE: double-check these line numbers against your copy of the book / slides.
+# "Alg. 39 line N" comments refer to Algorithm 39 (Particle Swarm Optimization) in Luke,
+# "Essentials of Metaheuristics", Section 3.5 (line numbers checked against the book).
+# Differences from the book's wording (see the header of pso/particle.py): gamma and delta are
+# swapped (book gamma = informants, book delta = global; here delta = informants, gamma = global),
+# and a particle is never its own informant (the book's line 18 includes it).
 #
 # Extensions beyond the minimum specification (all off by default, so the default
 # behaviour is exactly Algorithm 39):
@@ -119,7 +121,8 @@ class Population:
             self.global_best_position = best.best_position.copy()
 
     def assign_informants(self) -> None:
-        # Alg. 39 line 18 (informants of x): choose who each particle listens to.
+        # Alg. 39 line 18 (x+ needs the informants of x): choose who each particle listens to.
+        # (The book includes x itself among its informants; here informants are other particles only.)
         # Re-pick neighbours every iteration (for nearest-neighbour this tracks movement).
         for p in self.particles:
             p.informants = self.informant_strategy.select_informants(
@@ -174,12 +177,12 @@ class Population:
         if callback:
             callback(0, self)
         stale = 0  # iterations in a row with no improvement (for early stopping)
-        for t in range(self.num_iterations):  # Alg. 39 lines 11 and 25: repeat ... until out of time
+        for t in range(self.num_iterations):  # Alg. 39 lines 11 and 27: repeat ... until out of time
             alpha_t = self._alpha_at(t)
             previous = self.global_best_fitness  # remember, to detect improvement
             self.assign_informants()
             # Move every particle: velocity first, then position.
-            # Alg. 39 lines 16-22 (velocity update) and 23-24 (position update).
+            # Alg. 39 lines 16-24 (work out each velocity) and 25-26 (move each particle).
             # The bests used here were fixed at the end of the previous iteration, so moving
             # the particles one after another gives the same result as moving them together.
             for p in self.particles:
@@ -203,5 +206,5 @@ class Population:
         return self.get_best_solution()
 
     def get_best_solution(self):
-        # Alg. 39 line 26: return Best
+        # Alg. 39 line 28: return Best
         return self.global_best_position, self.global_best_fitness

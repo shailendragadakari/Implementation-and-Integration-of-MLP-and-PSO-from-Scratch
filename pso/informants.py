@@ -1,5 +1,7 @@
 # Informant selection strategies.
 # Both strategies exclude the particle itself and return exactly k particles.
+# (Algorithm 39 in the book includes the particle itself among its informants; the coursework
+# design document says it must never be its own informant, so it is excluded here.)
 # "Informants" are the neighbors a particle listens to; swapping the strategy
 # changes who the neighbors are without touching any other code.
 from abc import ABC, abstractmethod

@@ -1,10 +1,16 @@
 # Particle. One particle = one candidate solution that moves around the search space.
 #
-# "Alg. 39 line N" comments refer to Algorithm 39 (PSO with informants) in Luke,
-# "Essentials of Metaheuristics", Section 3.5, as numbered in the Week 7 lecture slides.
-# NOTE: double-check these line numbers against your copy of the book / slides.
-# Naming used here (follows the coursework design document): alpha = inertia,
-# beta = personal best, delta = informants' best, gamma = global best, epsilon = step size.
+# "Alg. 39 line N" comments refer to Algorithm 39 (Particle Swarm Optimization) in Luke,
+# "Essentials of Metaheuristics", Section 3.5 (line numbers checked against the book).
+#
+# Two deliberate differences from the book's wording (both follow the coursework design document):
+#   1. NAMING of the two social coefficients is swapped:
+#          book : beta = personal best, gamma = informants' best, delta = global best
+#          code : beta = personal best, delta = informants' best, gamma = global best
+#      (alpha = inertia and epsilon = step size are the same in both.)
+#   2. INFORMANTS: the book's line 18 includes the particle itself among its informants. Here a
+#      particle is never its own informant (the coursework says informants are OTHER particles;
+#      its own best is already pulled on by the beta term).
 
 import numpy as np
 
@@ -45,9 +51,11 @@ class Particle:
         return best.best_position, best.best_fitness
 
     def update_velocity(self, informants_best, global_best, alpha, beta, gamma, delta):
-        # Alg. 39 lines 19-22: x! <- global best location; for each dimension i draw
-        #         b, c, d uniformly from 0..beta, 0..delta, 0..gamma (here: coefficient * U[0,1))
-        #         and set v_i <- alpha*v_i + b*(x*_i - x_i) + c*(x+_i - x_i) + d*(x!_i - x_i).
+        # Alg. 39 lines 19-24: x! is the global best (line 19). For each dimension i (line 20) draw
+        #         b from 0..beta (21), c from 0..(informants coefficient) (22) and d from
+        #         0..(global coefficient) (23) -- here each is coefficient * U[0,1) -- then set
+        #         v_i <- alpha*v_i + b*(x*_i - x_i) + c*(x+_i - x_i) + d*(x!_i - x_i)   (line 24).
+        #         Name mapping: book gamma = our delta (informants), book delta = our gamma (global).
         # v <- alpha*v + beta*r1*(pbest-x) + delta*r2*(informants_best-x) + gamma*r3*(gbest-x)
         #
         #         r1, r2, r3 are drawn per dimension, uniformly in [0, 1).
@@ -64,6 +72,6 @@ class Particle:
         )
 
     def update_position(self, epsilon: float = 1.0) -> None:
-        # Alg. 39 line 24: x <- x + epsilon * v
+        # Alg. 39 line 26 (inside the "for each particle" loop of line 25): x <- x + epsilon * v
         # Move: new position = old position + step size * velocity.
         self.position = self.position + epsilon * self.velocity
