@@ -1,0 +1,4 @@
+timestamp,split_seed,hidden_layers,activations,n_parameters,informant_strategy,k_informants,particles,iterations,target_evaluations,fitness_calls,alpha,beta,delta,gamma,epsilon,pso_seed,best_training_loss,test_loss,accuracy,precision,recall,f1,tp,tn,fp,fn
+2026-11-26 15:54:54,42,8,tanh,49,nearest,3,30,100,3000,3030,0.7,1.5,1.5,0.0,1.0,42,0.015356734450167135,0.01875296890175803,0.9963503649635036,0.991869918699187,1.0,0.9959183673469388,122,151,1,0
+2026-11-26 15:55:16,42,16,tanh,97,nearest,3,30,100,3000,3030,0.7,1.5,1.5,0.0,1.0,42,0.0077687425319268085,0.010527062547411092,1.0,1.0,1.0,1.0,122,152,0,0
+2026-11-26 15:55:36,42,32,tanh,193,nearest,3,30,100,3000,3030,0.7,1.5,1.5,0.0,1.0,42,0.001799916129183852,0.0007705856921584843,1.0,1.0,1.0,1.0,122,152,0,0
